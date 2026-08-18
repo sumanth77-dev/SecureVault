@@ -1,0 +1,31 @@
+# Environment variables & secrets
+.env
+.env.*
+.env.local
+.env.development
+.env.test
+.env.production
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Uploads and temporary files
+uploads/
+tmp/
+temp/
+
+# Coverage and test artifacts
+coverage/
+.nyc_output/
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

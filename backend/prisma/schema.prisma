@@ -1,0 +1,177 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+enum NotificationType {
+  EXPIRY
+  SECURITY
+  SHARING
+  SYSTEM
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  UPLOAD
+  DOWNLOAD
+  VIEW
+  DELETE
+  RENAME
+  SHARE
+  REVOKE_SHARE
+  PASSWORD_CHANGE
+  PROFILE_UPDATE
+}
+
+model User {
+  id               String         @id @default(uuid())
+  name             String
+  email            String         @unique
+  passwordHash     String?
+  googleId         String?        @unique
+  authProvider     AuthProvider   @default(LOCAL)
+  avatarUrl        String?
+  phone            String?
+  twoFactorEnabled Boolean        @default(false)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  folders          Folder[]
+  documents        Document[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([email])
+  @@index([googleId])
+}
+
+model Folder {
+  id          String     @id @default(uuid())
+  userId      String
+  name        String
+  color       String     @default("blue")
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents   Document[]
+
+  @@index([userId])
+}
+
+model Document {
+  id               String            @id @default(uuid())
+  userId           String
+  folderId         String?
+  name             String
+  originalFilename String
+  category         String            @default("Personal")
+  description      String?
+  storageKey       String
+  mimeType         String
+  fileSize         Int               @default(0)
+  expiryDate       DateTime?
+  isStarred        Boolean           @default(false)
+  previewType      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folder           Folder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  versions         DocumentVersion[]
+  shareLinks       ShareLink[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([userId])
+  @@index([folderId])
+  @@index([category])
+  @@index([expiryDate])
+  @@index([userId, category])
+  @@index([userId, folderId])
+}
+
+model DocumentVersion {
+  id               String   @id @default(uuid())
+  documentId       String
+  storageKey       String
+  versionNumber    String   @default("v1.0")
+  originalFilename String?
+  mimeType         String?
+  fileSize         Int      @default(0)
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  document         Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model ShareLink {
+  id             String    @id @default(uuid())
+  documentId     String
+  tokenHash      String    @unique
+  passwordHash   String?
+  expiresAt      DateTime?
+  allowDownload  Boolean   @default(true)
+  maxDownloads   Int?
+  downloadCount  Int       @default(0)
+  isRevoked      Boolean   @default(false)
+  sharedWith     String?
+  recipientEmail String?
+  createdAt      DateTime  @default(now())
+
+  document       Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([documentId])
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String
+  documentId String?
+  title      String
+  message    String
+  type       NotificationType @default(SYSTEM)
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   Document?        @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([userId, isRead])
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String
+  documentId String?
+  action     AuditAction
+  ipAddress  String?
+  userAgent  String?
+  details    String?
+  createdAt  DateTime    @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  document   Document?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([documentId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+}
