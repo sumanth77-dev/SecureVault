@@ -369,7 +369,7 @@ export const DocumentProvider = ({ children }) => {
       documentName: doc.name,
       sharedWith: sharedWith || 'External Recipient',
       recipientEmail: recipientEmail || '',
-      createdAt: now.toISOString(),
+      createdAt: new Date(now).toISOString(),
       expiresAt,
       expiryOption: expiryOption || '24 hours',
       hasPassword: Boolean(hasPassword && password),
