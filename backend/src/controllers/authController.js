@@ -23,6 +23,16 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(6, 'Password must be at least 6 characters')
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+const getCookieOptions = (maxAge) => ({
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: isProduction ? 'none' : 'lax',
+  path: '/',
+  ...(maxAge !== undefined ? { maxAge } : {})
+});
+
 export const authController = {
   /**
    * Standard Email & Password Registration
@@ -33,21 +43,8 @@ export const authController = {
       const result = await authService.register(validated);
 
       // Set secure HTTP-only cookies
-      res.cookie('sv_access_token', result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 1000 // 1 hour
-      });
-
-      res.cookie('sv_refresh_token', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-      });
+      res.cookie('sv_access_token', result.accessToken, getCookieOptions(60 * 60 * 1000));
+      res.cookie('sv_refresh_token', result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
 
       res.status(201).json({
         success: true,
@@ -75,21 +72,8 @@ export const authController = {
         userAgent
       });
 
-      res.cookie('sv_access_token', result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 1000
-      });
-
-      res.cookie('sv_refresh_token', result.refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      res.cookie('sv_access_token', result.accessToken, getCookieOptions(60 * 60 * 1000));
+      res.cookie('sv_refresh_token', result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
 
       res.status(200).json({
         success: true,
@@ -107,15 +91,7 @@ export const authController = {
   async initiateGoogleAuth(req, res, next) {
     try {
       const { url, state } = authService.getGoogleAuthUrl();
-      const isProduction = process.env.NODE_ENV === 'production';
-
-      const cookieOptions = {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 15 * 60 * 1000 // 15 minutes
-      };
+      const cookieOptions = getCookieOptions(15 * 60 * 1000);
 
       logger.info(`[OAuth Init] Setting sv_oauth_state cookie: secure=${cookieOptions.secure}, sameSite=${cookieOptions.sameSite}, path=${cookieOptions.path}`);
 
@@ -133,7 +109,6 @@ export const authController = {
    */
   async googleCallback(req, res, next) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const isProduction = process.env.NODE_ENV === 'production';
     try {
       const { code, state, error, error_description } = req.query;
       const cookieState = req.cookies?.sv_oauth_state;
@@ -142,12 +117,7 @@ export const authController = {
       logger.info(`[OAuth Callback] Cookies object present: ${Boolean(req.cookies)}, sv_oauth_state present: ${Boolean(cookieState)}, query.state present: ${Boolean(state)}, state matched: ${Boolean(cookieState && state && cookieState === state)}`);
 
       // Clear state cookie with matching attributes
-      res.clearCookie('sv_oauth_state', {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/'
-      });
+      res.clearCookie('sv_oauth_state', getCookieOptions());
 
       if (error) {
         logger.warn(`Google OAuth redirected with error: ${error} - ${error_description}`);
@@ -170,21 +140,8 @@ export const authController = {
         userAgent
       });
 
-      res.cookie('sv_access_token', result.accessToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 1000
-      });
-
-      res.cookie('sv_refresh_token', result.refreshToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60 * 1000
-      });
+      res.cookie('sv_access_token', result.accessToken, getCookieOptions(60 * 60 * 1000));
+      res.cookie('sv_refresh_token', result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
 
       res.redirect(`${frontendUrl}/login?auth=success`);
     } catch (err) {
@@ -197,9 +154,8 @@ export const authController = {
    * Log out user and clear authentication cookies
    */
   async logout(req, res) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    res.clearCookie('sv_access_token', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
-    res.clearCookie('sv_refresh_token', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
+    res.clearCookie('sv_access_token', getCookieOptions());
+    res.clearCookie('sv_refresh_token', getCookieOptions());
     res.status(200).json({
       success: true,
       message: 'Logged out successfully.'
@@ -214,13 +170,7 @@ export const authController = {
       const refreshToken = req.body.refreshToken || req.cookies?.sv_refresh_token;
       const result = await authService.refresh(refreshToken);
 
-      res.cookie('sv_access_token', result.accessToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 1000
-      });
+      res.cookie('sv_access_token', result.accessToken, getCookieOptions(60 * 60 * 1000));
 
       res.status(200).json({
         success: true,
