@@ -27,7 +27,8 @@ import { ProfilePage } from './pages/app/ProfilePage';
 import { SettingsPage } from './pages/app/SettingsPage';
 
 // Protected Route Guard (Mock Auth aware)
-const ProtectedRoute = ({ children }) => {
+const 
+ProtectedRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

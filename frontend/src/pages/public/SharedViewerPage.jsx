@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, NavLink } from 'react-router-dom';
 import {
   ShieldCheck,
+  ShieldAlert,
+  ShieldX,
   Lock,
   Download,
   Clock,
@@ -12,7 +14,10 @@ import {
   KeyRound,
   Sun,
   Moon,
-  Loader2
+  Loader2,
+  ArrowLeft,
+  AlertOctagon,
+  FileX
 } from 'lucide-react';
 import { useDocuments } from '../../context/DocumentContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -20,7 +25,6 @@ import { DocumentPreviewCanvas } from '../../components/common/DocumentPreviewCa
 import { Button } from '../../components/common/Button';
 import { useToast } from '../../components/common/Toast';
 import { shareService } from '../../services/shareService';
-
 import { formatRemainingCountdown } from '../../utils/formatters';
 
 export const SharedViewerPage = () => {
@@ -35,26 +39,77 @@ export const SharedViewerPage = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isRevoked, setIsRevoked] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
+  const [isNotFound, setIsNotFound] = useState(false);
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState('');
 
-  // Load public share details from backend API
+  // Load public share details from backend API or local mock context
   useEffect(() => {
     let isMounted = true;
     async function loadShare() {
       setLoading(true);
       setError('');
+      setIsRevoked(false);
+      setIsExpired(false);
+      setIsNotFound(false);
+
       try {
         if (token) {
           const data = await shareService.getPublicShare(token);
           if (isMounted && data) {
-            setShareData(data);
-            setIsUnlocked(data.isUnlocked || !data.hasPassword);
+            if (data.isRevoked || data.status === 'revoked') {
+              setIsRevoked(true);
+              setError('This document link has been revoked by the owner.');
+            } else {
+              setShareData(data);
+              setIsUnlocked(data.isUnlocked || !data.hasPassword);
+            }
           }
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.message || 'This secure link is invalid or has expired.');
+          const errMsg = err.message || '';
+          const isRevocation =
+            err.code === 'SHARE_REVOKED' ||
+            err.status === 410 && errMsg.toLowerCase().includes('revoked') ||
+            errMsg.toLowerCase().includes('revoked');
+
+          const isExpiration =
+            err.status === 410 && (errMsg.toLowerCase().includes('expired') || errMsg.toLowerCase().includes('limit')) ||
+            errMsg.toLowerCase().includes('expired');
+
+          const is404 = err.status === 404 || errMsg.toLowerCase().includes('not exist') || errMsg.toLowerCase().includes('not found');
+
+          // Check local state fallback for mock mode
+          const localShare = sharedDocuments.find(s => s.token === token);
+          if (localShare) {
+            if (localShare.status === 'revoked') {
+              setIsRevoked(true);
+              setError('This document link has been revoked by the owner.');
+            } else if (localShare.status === 'expired') {
+              setIsExpired(true);
+              setError('This secure link has expired.');
+            } else {
+              setShareData({
+                ...localShare,
+                localDoc: documents.find(d => d.id === localShare.documentId)
+              });
+              setIsUnlocked(!localShare.hasPassword);
+            }
+          } else if (isRevocation) {
+            setIsRevoked(true);
+            setError(errMsg || 'This document link has been revoked by the owner.');
+          } else if (isExpiration) {
+            setIsExpired(true);
+            setError(errMsg || 'This secure link has expired.');
+          } else if (is404) {
+            setIsNotFound(true);
+            setError(errMsg || 'This secure link does not exist or has been removed.');
+          } else {
+            setError(errMsg || 'Unable to access shared document.');
+          }
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -63,19 +118,20 @@ export const SharedViewerPage = () => {
 
     loadShare();
     return () => { isMounted = false; };
-  }, [token]);
+  }, [token, sharedDocuments, documents]);
 
   // Real expiration timestamp countdown timer
   useEffect(() => {
-    if (!shareData?.expiresAt) {
+    if (!shareData?.expiresAt || isRevoked || isExpired) {
       setCountdown(shareData ? 'Never expires' : '');
       return;
     }
 
     const tick = () => {
-      const { formatted, isExpired } = formatRemainingCountdown(shareData.expiresAt);
+      const { formatted, isExpired: expired } = formatRemainingCountdown(shareData.expiresAt);
       setCountdown(formatted);
-      if (isExpired) {
+      if (expired) {
+        setIsExpired(true);
         setError('This secure link has expired.');
       }
     };
@@ -83,10 +139,12 @@ export const SharedViewerPage = () => {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [shareData?.expiresAt]);
+  }, [shareData?.expiresAt, isRevoked, isExpired]);
 
   const handleUnlock = async (e) => {
     e.preventDefault();
+    if (isRevoked || isExpired) return;
+
     if (!shareData?.hasPassword) {
       setIsUnlocked(true);
       return;
@@ -104,11 +162,21 @@ export const SharedViewerPage = () => {
         }
       }
     } catch (err) {
-      setError(err.message || 'Incorrect passcode. Please check with the document owner.');
+      if (err.code === 'SHARE_REVOKED' || err.message?.toLowerCase().includes('revoked')) {
+        setIsRevoked(true);
+        setError('This document link has been revoked by the owner.');
+      } else {
+        setError(err.message || 'Incorrect passcode. Please check with the document owner.');
+      }
     }
   };
 
   const handleDownload = async () => {
+    if (isRevoked || isExpired) {
+      showToast('Cannot download: Link access has been terminated.', 'error');
+      return;
+    }
+
     showToast(`Downloading "${shareData?.documentName || 'document'}"...`, 'info');
     try {
       if (token) {
@@ -120,6 +188,12 @@ export const SharedViewerPage = () => {
         }
       }
     } catch (err) {
+      if (err.code === 'SHARE_REVOKED' || err.message?.toLowerCase().includes('revoked')) {
+        setIsRevoked(true);
+        setError('This document link has been revoked by the owner.');
+        showToast('Document access was revoked by the owner.', 'error');
+        return;
+      }
       console.warn('API download trigger fallback:', err);
     }
     setTimeout(() => {
@@ -142,7 +216,7 @@ export const SharedViewerPage = () => {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-slate-500">
           <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-          <p className="text-sm font-medium">Verifying cryptographic link...</p>
+          <p className="text-sm font-medium">Verifying cryptographic link & access status...</p>
         </div>
       </div>
     );
@@ -176,8 +250,110 @@ export const SharedViewerPage = () => {
 
       {/* Main Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-8 flex flex-col items-center justify-center">
-        {!isUnlocked ? (
-          /* Locked Challenge Card */
+        {/* 1. DEDICATED ACCESS REVOKED SCREEN */}
+        {isRevoked ? (
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900/60 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            {/* Glowing Revoked Icon */}
+            <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-rose-500/15 animate-ping" />
+              <div className="relative w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 flex items-center justify-center shadow-md">
+                <ShieldAlert className="w-9 h-9" />
+              </div>
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/80 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-[11px] font-bold uppercase tracking-wider mb-2">
+                <AlertOctagon className="w-3.5 h-3.5" /> Access Revoked
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                Document Access Revoked
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                The document owner has revoked access permissions for this secure share link. The file cannot be decrypted, viewed, or downloaded.
+              </p>
+            </div>
+
+            {/* Revocation Security Card */}
+            <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 text-left space-y-2.5">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Security Status:</span>
+                <span className="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                  <ShieldX className="w-3.5 h-3.5" /> Access Terminated
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Security Link:</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300 truncate max-w-[170px]">
+                  #TRX-{token?.substring(0, 10) || 'INVALID'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-xs pt-1 border-t border-rose-100 dark:border-rose-900/40">
+                <span className="text-slate-500 dark:text-slate-400">Policy:</span>
+                <span className="text-slate-700 dark:text-slate-300 font-medium">Zero-Trust Revocation</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <NavLink to="/">
+                <Button variant="primary" icon={ArrowLeft} className="w-full">
+                  Return to SecureVault
+                </Button>
+              </NavLink>
+            </div>
+          </div>
+        ) : isExpired ? (
+          /* 2. DEDICATED EXPIRED LINK SCREEN */
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/60 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800 mx-auto flex items-center justify-center shadow-md">
+              <Clock className="w-8 h-8" />
+            </div>
+
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/80 dark:text-amber-400 border border-amber-200 dark:border-amber-800 text-[11px] font-bold uppercase tracking-wider mb-2">
+                Link Expired
+              </span>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+                This Secure Link Has Expired
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                The time limit set by the vault owner for this link has elapsed. Request a new share link from the sender to access this file.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <NavLink to="/">
+                <Button variant="primary" icon={ArrowLeft} className="w-full">
+                  Return to SecureVault
+                </Button>
+              </NavLink>
+            </div>
+          </div>
+        ) : isNotFound ? (
+          /* 3. DEDICATED NOT FOUND SCREEN */
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 mx-auto flex items-center justify-center shadow-md">
+              <FileX className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white">
+                Secure Link Not Found
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                This share link does not exist or has been removed. Please verify the URL with the sender.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <NavLink to="/">
+                <Button variant="primary" icon={ArrowLeft} className="w-full">
+                  Return to SecureVault
+                </Button>
+              </NavLink>
+            </div>
+          </div>
+        ) : !isUnlocked ? (
+          /* 4. LOCKED CHALLENGE CARD */
           <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/60 mx-auto flex items-center justify-center shadow-sm">
               <Lock className="w-8 h-8" />
@@ -214,10 +390,12 @@ export const SharedViewerPage = () => {
             </div>
 
             {/* Expiry Countdown Timer */}
-            <div className="flex items-center justify-center gap-2 text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 py-2 px-3 rounded-xl border border-amber-200 dark:border-amber-900">
-              <Clock className="w-4 h-4" />
-              <span>This secure link expires in <strong>{countdown}</strong></span>
-            </div>
+            {shareData?.expiresAt && (
+              <div className="flex items-center justify-center gap-2 text-xs font-mono text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 py-2 px-3 rounded-xl border border-amber-200 dark:border-amber-900">
+                <Clock className="w-4 h-4" />
+                <span>This secure link expires in <strong>{countdown}</strong></span>
+              </div>
+            )}
 
             {/* Password Unlock Form */}
             <form onSubmit={handleUnlock} className="space-y-4 text-left">
@@ -258,7 +436,7 @@ export const SharedViewerPage = () => {
             </form>
           </div>
         ) : (
-          /* Unlocked Document Preview Area */
+          /* 5. UNLOCKED DOCUMENT PREVIEW AREA */
           <div className="w-full space-y-6 animate-in fade-in zoom-in-95 duration-200">
             {/* Header info bar */}
             <div className="p-4 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -300,7 +478,7 @@ export const SharedViewerPage = () => {
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-500" /> This session is monitored and logged under cryptographic reference: #TRX-{token?.substring(0, 8) || '9921'}
               </span>
-              <span>Expires in {countdown}</span>
+              <span>{countdown ? `Expires in ${countdown}` : 'Protected Session'}</span>
             </div>
           </div>
         )}

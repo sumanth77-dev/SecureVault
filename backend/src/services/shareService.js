@@ -321,9 +321,16 @@ export const shareService = {
       include: { document: true }
     });
 
-    if (!share || share.isRevoked) {
-      const error = new Error('Secure link is invalid or revoked.');
+    if (!share) {
+      const error = new Error('Share link does not exist or has been removed.');
       error.statusCode = 404;
+      throw error;
+    }
+
+    if (share.isRevoked) {
+      const error = new Error('This document link has been revoked by the owner.');
+      error.statusCode = 410;
+      error.code = 'SHARE_REVOKED';
       throw error;
     }
 
@@ -384,9 +391,16 @@ export const shareService = {
       }
     });
 
-    if (!share || share.isRevoked) {
-      const error = new Error('Share link is invalid or revoked.');
+    if (!share) {
+      const error = new Error('Share link does not exist or has been removed.');
       error.statusCode = 404;
+      throw error;
+    }
+
+    if (share.isRevoked) {
+      const error = new Error('This document link has been revoked by the owner.');
+      error.statusCode = 410;
+      error.code = 'SHARE_REVOKED';
       throw error;
     }
 
@@ -471,9 +485,16 @@ export const shareService = {
       }
     });
 
-    if (!share || share.isRevoked) {
-      const error = new Error('Share link is invalid or revoked.');
+    if (!share) {
+      const error = new Error('Share link does not exist or has been removed.');
       error.statusCode = 404;
+      throw error;
+    }
+
+    if (share.isRevoked) {
+      const error = new Error('This document link has been revoked by the owner.');
+      error.statusCode = 410;
+      error.code = 'SHARE_REVOKED';
       throw error;
     }
 
