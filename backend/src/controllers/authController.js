@@ -143,7 +143,7 @@ export const authController = {
       res.cookie('sv_access_token', result.accessToken, getCookieOptions(60 * 60 * 1000));
       res.cookie('sv_refresh_token', result.refreshToken, getCookieOptions(7 * 24 * 60 * 60 * 1000));
 
-      res.redirect(`${frontendUrl}/login?auth=success`);
+      res.redirect(`${frontendUrl}/login?auth=success&token=${encodeURIComponent(result.accessToken)}`);
     } catch (err) {
       logger.error('Google OAuth callback error:', err.message);
       res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message || 'OAuth authentication failed')}`);

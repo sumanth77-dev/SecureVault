@@ -152,11 +152,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Handle OAuth success via HTTP-only cookie and /api/auth/me
+   * Handle OAuth success and store token for cross-origin API authorization
    */
-  const handleOAuthSuccess = async () => {
+  const handleOAuthSuccess = async (token) => {
     setLoading(true);
     try {
+      if (token) {
+        setStorageItem('sv_auth_token', token);
+      }
       const userData = await authService.getMe();
       if (userData) {
         const loggedUser = {
