@@ -68,24 +68,21 @@ export const AuthProvider = ({ children }) => {
 
   // Check current session from API on mount
   useEffect(() => {
-    const token = getStorageItem('sv_auth_token', null);
-    if (token) {
-      authService.getMe()
-        .then(userData => {
-          if (userData) {
-            setUser(prev => ({
-              ...DEFAULT_USER,
-              ...prev,
-              ...userData,
-              authProvider: userData.authProvider || prev.authProvider || 'LOCAL'
-            }));
-            setIsAuthenticated(true);
-          }
-        })
-        .catch(() => {
-          // Keep state
-        });
-    }
+    authService.getMe()
+      .then(userData => {
+        if (userData) {
+          setUser(prev => ({
+            ...DEFAULT_USER,
+            ...prev,
+            ...userData,
+            authProvider: userData.authProvider || prev.authProvider || 'LOCAL'
+          }));
+          setIsAuthenticated(true);
+        }
+      })
+      .catch(() => {
+        // Unauthenticated session
+      });
 
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
@@ -155,12 +152,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   /**
-   * Handle OAuth Token received from redirect callback
+   * Handle OAuth success via HTTP-only cookie and /api/auth/me
    */
-  const handleOAuthSuccess = async (token) => {
+  const handleOAuthSuccess = async () => {
     setLoading(true);
     try {
-      setStorageItem('sv_auth_token', token);
       const userData = await authService.getMe();
       if (userData) {
         const loggedUser = {

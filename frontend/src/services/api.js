@@ -38,6 +38,7 @@ class ApiClient {
     const isFormData = options.body instanceof FormData;
 
     const config = {
+      credentials: 'include',
       ...options,
       headers: this.getHeaders(isFormData, options.headers)
     };

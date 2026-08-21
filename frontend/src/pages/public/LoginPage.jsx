@@ -30,15 +30,14 @@ export const LoginPage = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Handle OAuth callback parameters (e.g. ?auth=success&token=... or ?error=...)
+  // Handle OAuth callback parameters (e.g. ?auth=success or ?error=...)
   useEffect(() => {
     const authStatus = searchParams.get('auth');
-    const token = searchParams.get('token');
     const oauthError = searchParams.get('error');
 
-    if (authStatus === 'success' && token) {
+    if (authStatus === 'success') {
       setIsGoogleLoading(true);
-      handleOAuthSuccess(token)
+      handleOAuthSuccess()
         .then(() => {
           showToast('Signed in with Google successfully!', 'success');
           // Clear query params from browser URL
