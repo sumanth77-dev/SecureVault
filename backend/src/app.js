@@ -24,6 +24,9 @@ import dashboardRoutes from './routes/dashboardRoutes.js';
 
 const app = express();
 
+// Trust reverse proxy (Render, Heroku, etc.) for HTTPS detection and secure cookies
+app.set('trust proxy', 1);
+
 // Security HTTP headers
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }

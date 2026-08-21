@@ -37,6 +37,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
+        path: '/',
         maxAge: 60 * 60 * 1000 // 1 hour
       });
 
@@ -44,6 +45,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
       });
 
@@ -77,6 +79,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
+        path: '/',
         maxAge: 60 * 60 * 1000
       });
 
@@ -84,6 +87,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
@@ -103,14 +107,20 @@ export const authController = {
   async initiateGoogleAuth(req, res, next) {
     try {
       const { url, state } = authService.getGoogleAuthUrl();
+      const isProduction = process.env.NODE_ENV === 'production';
+
+      const cookieOptions = {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 15 * 60 * 1000 // 15 minutes
+      };
+
+      logger.info(`[OAuth Init] Setting sv_oauth_state cookie: secure=${cookieOptions.secure}, sameSite=${cookieOptions.sameSite}, path=${cookieOptions.path}`);
 
       // Store CSRF state parameter in secure cookie
-      res.cookie('sv_oauth_state', state, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 15 * 60 * 1000 // 15 minutes
-      });
+      res.cookie('sv_oauth_state', state, cookieOptions);
 
       res.redirect(302, url);
     } catch (error) {
@@ -123,12 +133,21 @@ export const authController = {
    */
   async googleCallback(req, res, next) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const isProduction = process.env.NODE_ENV === 'production';
     try {
       const { code, state, error, error_description } = req.query;
       const cookieState = req.cookies?.sv_oauth_state;
 
-      // Clear state cookie
-      res.clearCookie('sv_oauth_state');
+      // Safe diagnostic logging (NEVER logs any secret or state values)
+      logger.info(`[OAuth Callback] Cookies object present: ${Boolean(req.cookies)}, sv_oauth_state present: ${Boolean(cookieState)}, query.state present: ${Boolean(state)}, state matched: ${Boolean(cookieState && state && cookieState === state)}`);
+
+      // Clear state cookie with matching attributes
+      res.clearCookie('sv_oauth_state', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        path: '/'
+      });
 
       if (error) {
         logger.warn(`Google OAuth redirected with error: ${error} - ${error_description}`);
@@ -153,19 +172,21 @@ export const authController = {
 
       res.cookie('sv_access_token', result.accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,
         sameSite: 'lax',
+        path: '/',
         maxAge: 60 * 60 * 1000
       });
 
       res.cookie('sv_refresh_token', result.refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,
         sameSite: 'lax',
+        path: '/',
         maxAge: 7 * 24 * 60 * 60 * 1000
       });
 
-      res.redirect(`${frontendUrl}/login?auth=success&token=${encodeURIComponent(result.accessToken)}`);
+      res.redirect(`${frontendUrl}/login?auth=success`);
     } catch (err) {
       logger.error('Google OAuth callback error:', err.message);
       res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(err.message || 'OAuth authentication failed')}`);
@@ -176,8 +197,9 @@ export const authController = {
    * Log out user and clear authentication cookies
    */
   async logout(req, res) {
-    res.clearCookie('sv_access_token');
-    res.clearCookie('sv_refresh_token');
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('sv_access_token', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
+    res.clearCookie('sv_refresh_token', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
     res.status(200).json({
       success: true,
       message: 'Logged out successfully.'
@@ -196,6 +218,7 @@ export const authController = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
+        path: '/',
         maxAge: 60 * 60 * 1000
       });
 

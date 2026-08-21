@@ -100,9 +100,10 @@ describe('Authentication API Tests', () => {
     assert.equal(res.status, 302);
     assert.ok(res.headers.location);
     assert.ok(res.headers.location.includes('error=cancelled') || res.headers.location.includes('error='));
+    assert.ok(!res.headers.location.includes('token='));
   });
 
-  test('GET /api/auth/google/callback - Should reject callback with missing code or mismatched state', async () => {
+  test('GET /api/auth/google/callback - Should reject callback with invalid or mismatched state', async () => {
     const res = await request(app)
       .get('/api/auth/google/callback?code=fake_code&state=fake_state')
       .set('Cookie', ['sv_oauth_state=different_state']);
@@ -110,5 +111,108 @@ describe('Authentication API Tests', () => {
     assert.equal(res.status, 302);
     assert.ok(res.headers.location);
     assert.ok(res.headers.location.includes('error='));
+    assert.ok(!res.headers.location.includes('token='));
+  });
+
+  test('GET /api/auth/google/callback - Should reject callback with expired/missing state cookie', async () => {
+    const res = await request(app)
+      .get('/api/auth/google/callback?code=fake_code&state=fake_state');
+
+    assert.equal(res.status, 302);
+    assert.ok(res.headers.location);
+    assert.ok(res.headers.location.includes('error='));
+    assert.ok(!res.headers.location.includes('token='));
+  });
+
+  test('GET /api/auth/google/callback - Success flow sets cookies, redirects to ?auth=success WITHOUT token in URL', async () => {
+    const originalFetch = global.fetch;
+    const originalClientId = process.env.GOOGLE_CLIENT_ID;
+    const originalClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+    process.env.GOOGLE_CLIENT_ID = 'test-client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
+
+    const testState = 'valid_oauth_state_12345';
+    const testGoogleId = `google_${Date.now()}`;
+    const testGoogleEmail = `google_${Date.now()}@example.com`;
+
+    // Mock Google endpoints
+    global.fetch = async (url) => {
+      if (url === 'https://oauth2.googleapis.com/token') {
+        return {
+          ok: true,
+          json: async () => ({
+            access_token: 'mock_google_access_token',
+            token_type: 'Bearer',
+            expires_in: 3600
+          })
+        };
+      }
+      if (url === 'https://www.googleapis.com/oauth2/v3/userinfo') {
+        return {
+          ok: true,
+          json: async () => ({
+            sub: testGoogleId,
+            email: testGoogleEmail,
+            email_verified: true,
+            name: 'Google OAuth User',
+            picture: 'https://example.com/photo.jpg'
+          })
+        };
+      }
+      return originalFetch(url);
+    };
+
+    try {
+      const res = await request(app)
+        .get(`/api/auth/google/callback?code=mock_auth_code&state=${testState}`)
+        .set('Cookie', [`sv_oauth_state=${testState}`]);
+
+      assert.equal(res.status, 302);
+      assert.ok(res.headers.location);
+      // Verify redirect target is strictly ?auth=success and NO token exists in URL
+      assert.ok(res.headers.location.endsWith('/login?auth=success'));
+      assert.ok(!res.headers.location.includes('token='));
+
+      // Verify HTTP-only authentication cookies are set
+      const cookies = res.headers['set-cookie'] || [];
+      const hasAccessTokenCookie = cookies.some(c => c.startsWith('sv_access_token='));
+      const hasRefreshTokenCookie = cookies.some(c => c.startsWith('sv_refresh_token='));
+      assert.ok(hasAccessTokenCookie, 'sv_access_token cookie should be set');
+      assert.ok(hasRefreshTokenCookie, 'sv_refresh_token cookie should be set');
+
+      // Extract cookie for testing /api/auth/me
+      const accessTokenCookie = cookies.find(c => c.startsWith('sv_access_token=')).split(';')[0];
+
+      // Test /api/auth/me using ONLY the cookie (no Authorization header)
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Cookie', [accessTokenCookie]);
+
+      assert.equal(meRes.status, 200);
+      assert.equal(meRes.body.success, true);
+      assert.equal(meRes.body.data.user.email, testGoogleEmail.toLowerCase());
+
+      // Test protected API route (e.g. /api/documents) using ONLY the cookie
+      const docRes = await request(app)
+        .get('/api/documents')
+        .set('Cookie', [accessTokenCookie]);
+
+      assert.equal(docRes.status, 200);
+      assert.equal(docRes.body.success, true);
+
+      // Test POST /api/auth/logout clears cookies
+      const logoutRes = await request(app)
+        .post('/api/auth/logout')
+        .set('Cookie', [accessTokenCookie]);
+
+      assert.equal(logoutRes.status, 200);
+      const logoutCookies = logoutRes.headers['set-cookie'] || [];
+      assert.ok(logoutCookies.some(c => c.includes('sv_access_token=;')));
+    } finally {
+      global.fetch = originalFetch;
+      process.env.GOOGLE_CLIENT_ID = originalClientId;
+      process.env.GOOGLE_CLIENT_SECRET = originalClientSecret;
+    }
   });
 });
