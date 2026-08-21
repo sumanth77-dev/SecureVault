@@ -102,4 +102,72 @@ describe('Document Sharing API Tests', () => {
 
     assert.equal(checkRes.status, 410);
   });
+
+  test('POST /api/shares - Should calculate exact 1 hour expiration', async () => {
+    const before = Date.now();
+    const res = await request(app)
+      .post('/api/shares')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        documentId,
+        sharedWith: '1-Hour Recipient',
+        expiryOption: '1 hour'
+      });
+
+    assert.equal(res.status, 201);
+    const expiresAt = new Date(res.body.data.expiresAt).getTime();
+    const diffSeconds = Math.round((expiresAt - before) / 1000);
+    assert.ok(diffSeconds >= 3590 && diffSeconds <= 3610, `Expected ~3600s, got ${diffSeconds}s`);
+  });
+
+  test('POST /api/shares - Should calculate exact 2 hours expiration', async () => {
+    const before = Date.now();
+    const res = await request(app)
+      .post('/api/shares')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        documentId,
+        sharedWith: '2-Hour Recipient',
+        expiryOption: '2 hours'
+      });
+
+    assert.equal(res.status, 201);
+    const expiresAt = new Date(res.body.data.expiresAt).getTime();
+    const diffSeconds = Math.round((expiresAt - before) / 1000);
+    assert.ok(diffSeconds >= 7190 && diffSeconds <= 7210, `Expected ~7200s, got ${diffSeconds}s`);
+  });
+
+  test('POST /api/shares - Should calculate exact 30 minutes expiration', async () => {
+    const before = Date.now();
+    const res = await request(app)
+      .post('/api/shares')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        documentId,
+        sharedWith: '30-Minute Recipient',
+        expiryOption: '30 minutes'
+      });
+
+    assert.equal(res.status, 201);
+    const expiresAt = new Date(res.body.data.expiresAt).getTime();
+    const diffSeconds = Math.round((expiresAt - before) / 1000);
+    assert.ok(diffSeconds >= 1790 && diffSeconds <= 1810, `Expected ~1800s, got ${diffSeconds}s`);
+  });
+
+  test('POST /api/shares - Should calculate exact 15 minutes expiration', async () => {
+    const before = Date.now();
+    const res = await request(app)
+      .post('/api/shares')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        documentId,
+        sharedWith: '15-Minute Recipient',
+        expiryOption: '15 minutes'
+      });
+
+    assert.equal(res.status, 201);
+    const expiresAt = new Date(res.body.data.expiresAt).getTime();
+    const diffSeconds = Math.round((expiresAt - before) / 1000);
+    assert.ok(diffSeconds >= 890 && diffSeconds <= 910, `Expected ~900s, got ${diffSeconds}s`);
+  });
 });

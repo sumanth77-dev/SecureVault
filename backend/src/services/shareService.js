@@ -40,18 +40,36 @@ export const shareService = {
     }
 
     let calculatedExpiresAt = null;
-    const now = new Date();
+    const now = Date.now();
 
     if (customExpiresAt) {
       calculatedExpiresAt = new Date(customExpiresAt);
-    } else if (expiryOption === '1 hour') {
-      calculatedExpiresAt = new Date(now.getTime() + 60 * 60 * 1000);
-    } else if (expiryOption === '24 hours') {
-      calculatedExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    } else if (expiryOption === '7 days') {
-      calculatedExpiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    } else if (expiryOption === '30 days') {
-      calculatedExpiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    } else if (expiryOption && expiryOption !== 'Never') {
+      const match = String(expiryOption).trim().match(/^(\d+)\s*(minute|hour|day|second)s?$/i);
+      if (match) {
+        const val = parseInt(match[1], 10);
+        const unit = match[2].toLowerCase();
+        let ms = 0;
+        if (unit.startsWith('second')) ms = val * 1000;
+        else if (unit.startsWith('minute')) ms = val * 60 * 1000;
+        else if (unit.startsWith('hour')) ms = val * 60 * 60 * 1000;
+        else if (unit.startsWith('day')) ms = val * 24 * 60 * 60 * 1000;
+        calculatedExpiresAt = new Date(now + ms);
+      } else if (expiryOption === '15 minutes') {
+        calculatedExpiresAt = new Date(now + 15 * 60 * 1000);
+      } else if (expiryOption === '30 minutes') {
+        calculatedExpiresAt = new Date(now + 30 * 60 * 1000);
+      } else if (expiryOption === '1 hour') {
+        calculatedExpiresAt = new Date(now + 60 * 60 * 1000);
+      } else if (expiryOption === '2 hours') {
+        calculatedExpiresAt = new Date(now + 2 * 60 * 60 * 1000);
+      } else if (expiryOption === '24 hours') {
+        calculatedExpiresAt = new Date(now + 24 * 60 * 60 * 1000);
+      } else if (expiryOption === '7 days') {
+        calculatedExpiresAt = new Date(now + 7 * 24 * 60 * 60 * 1000);
+      } else if (expiryOption === '30 days') {
+        calculatedExpiresAt = new Date(now + 30 * 24 * 60 * 60 * 1000);
+      }
     }
 
     // Generate random cryptographic raw token and compute SHA-256 token hash

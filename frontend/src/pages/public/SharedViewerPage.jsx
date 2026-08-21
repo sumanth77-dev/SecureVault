@@ -21,6 +21,8 @@ import { Button } from '../../components/common/Button';
 import { useToast } from '../../components/common/Toast';
 import { shareService } from '../../services/shareService';
 
+import { formatRemainingCountdown } from '../../utils/formatters';
+
 export const SharedViewerPage = () => {
   const { token } = useParams();
   const { sharedDocuments, documents } = useDocuments();
@@ -34,7 +36,7 @@ export const SharedViewerPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [error, setError] = useState('');
-  const [countdown, setCountdown] = useState('23:42:15');
+  const [countdown, setCountdown] = useState('');
 
   // Load public share details from backend API
   useEffect(() => {
@@ -63,18 +65,25 @@ export const SharedViewerPage = () => {
     return () => { isMounted = false; };
   }, [token]);
 
-  // Countdown timer effect
+  // Real expiration timestamp countdown timer
   useEffect(() => {
-    let seconds = 23 * 3600 + 42 * 60 + 15;
-    const interval = setInterval(() => {
-      seconds = Math.max(0, seconds - 1);
-      const h = String(Math.floor(seconds / 3600)).padStart(2, '0');
-      const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, '0');
-      const s = String(seconds % 60).padStart(2, '0');
-      setCountdown(`${h}:${m}:${s}`);
-    }, 1000);
+    if (!shareData?.expiresAt) {
+      setCountdown(shareData ? 'Never expires' : '');
+      return;
+    }
+
+    const tick = () => {
+      const { formatted, isExpired } = formatRemainingCountdown(shareData.expiresAt);
+      setCountdown(formatted);
+      if (isExpired) {
+        setError('This secure link has expired.');
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [shareData?.expiresAt]);
 
   const handleUnlock = async (e) => {
     e.preventDefault();

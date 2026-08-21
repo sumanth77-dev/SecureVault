@@ -333,15 +333,33 @@ export const DocumentProvider = ({ children }) => {
     if (!doc) return null;
 
     let expiresAt = null;
-    const now = new Date();
-    if (expiryOption === '1 hour') {
-      expiresAt = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-    } else if (expiryOption === '24 hours') {
-      expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-    } else if (expiryOption === '7 days') {
-      expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (expiryOption === '30 days') {
-      expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const now = Date.now();
+    if (expiryOption && expiryOption !== 'Never') {
+      const match = String(expiryOption).trim().match(/^(\d+)\s*(minute|hour|day|second)s?$/i);
+      if (match) {
+        const val = parseInt(match[1], 10);
+        const unit = match[2].toLowerCase();
+        let ms = 0;
+        if (unit.startsWith('second')) ms = val * 1000;
+        else if (unit.startsWith('minute')) ms = val * 60 * 1000;
+        else if (unit.startsWith('hour')) ms = val * 60 * 60 * 1000;
+        else if (unit.startsWith('day')) ms = val * 24 * 60 * 60 * 1000;
+        expiresAt = new Date(now + ms).toISOString();
+      } else if (expiryOption === '15 minutes') {
+        expiresAt = new Date(now + 15 * 60 * 1000).toISOString();
+      } else if (expiryOption === '30 minutes') {
+        expiresAt = new Date(now + 30 * 60 * 1000).toISOString();
+      } else if (expiryOption === '1 hour') {
+        expiresAt = new Date(now + 60 * 60 * 1000).toISOString();
+      } else if (expiryOption === '2 hours') {
+        expiresAt = new Date(now + 2 * 60 * 60 * 1000).toISOString();
+      } else if (expiryOption === '24 hours') {
+        expiresAt = new Date(now + 24 * 60 * 60 * 1000).toISOString();
+      } else if (expiryOption === '7 days') {
+        expiresAt = new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
+      } else if (expiryOption === '30 days') {
+        expiresAt = new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
     }
 
     let newShare = {
