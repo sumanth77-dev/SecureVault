@@ -1,9 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { INITIAL_DOCUMENTS } from '../data/mockDocuments';
-import { INITIAL_FOLDERS } from '../data/mockFolders';
-import { INITIAL_SHARED_DOCUMENTS } from '../data/mockShared';
-import { INITIAL_ACTIVITY } from '../data/mockActivity';
-import { getStorageItem, setStorageItem } from '../utils/storage';
+import { getStorageItem, setStorageItem, removeStorageItem } from '../utils/storage';
 import { formatBytes, getExpiryStatus } from '../utils/formatters';
 import { documentService } from '../services/documentService';
 import { folderService } from '../services/folderService';
@@ -15,42 +11,64 @@ import { useAuth } from './AuthContext';
 const DocumentContext = createContext();
 
 export const DocumentProvider = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const [documents, setDocuments] = useState(() =>
-    getStorageItem('sv_documents', INITIAL_DOCUMENTS)
+    getStorageItem('sv_documents', [])
   );
 
   const [folders, setFolders] = useState(() =>
-    getStorageItem('sv_folders', INITIAL_FOLDERS)
+    getStorageItem('sv_folders', [])
   );
 
   const [sharedDocuments, setSharedDocuments] = useState(() =>
-    getStorageItem('sv_shared_docs', INITIAL_SHARED_DOCUMENTS)
+    getStorageItem('sv_shared_docs', [])
   );
 
   const [activities, setActivities] = useState(() =>
-    getStorageItem('sv_activities', INITIAL_ACTIVITY)
+    getStorageItem('sv_activities', [])
   );
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Sync to localStorage
+  // Clear or sync data
   useEffect(() => {
-    setStorageItem('sv_documents', documents);
-  }, [documents]);
+    if (!isAuthenticated) {
+      setDocuments([]);
+      setFolders([]);
+      setSharedDocuments([]);
+      setActivities([]);
+      removeStorageItem('sv_documents');
+      removeStorageItem('sv_folders');
+      removeStorageItem('sv_shared_docs');
+      removeStorageItem('sv_activities');
+    }
+  }, [isAuthenticated]);
+
+  // Sync to localStorage when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      setStorageItem('sv_documents', documents);
+    }
+  }, [documents, isAuthenticated]);
 
   useEffect(() => {
-    setStorageItem('sv_folders', folders);
-  }, [folders]);
+    if (isAuthenticated) {
+      setStorageItem('sv_folders', folders);
+    }
+  }, [folders, isAuthenticated]);
 
   useEffect(() => {
-    setStorageItem('sv_shared_docs', sharedDocuments);
-  }, [sharedDocuments]);
+    if (isAuthenticated) {
+      setStorageItem('sv_shared_docs', sharedDocuments);
+    }
+  }, [sharedDocuments, isAuthenticated]);
 
   useEffect(() => {
-    setStorageItem('sv_activities', activities);
-  }, [activities]);
+    if (isAuthenticated) {
+      setStorageItem('sv_activities', activities);
+    }
+  }, [activities, isAuthenticated]);
 
   // Fetch real data from backend API
   const fetchAllData = useCallback(async () => {
@@ -64,7 +82,7 @@ export const DocumentProvider = ({ children }) => {
         auditService.getAuditLogs()
       ]);
 
-      if (docsRes.status === 'fulfilled' && docsRes.value?.documents?.length > 0) {
+      if (docsRes.status === 'fulfilled' && Array.isArray(docsRes.value?.documents)) {
         setDocuments(docsRes.value.documents);
       }
 
@@ -76,11 +94,11 @@ export const DocumentProvider = ({ children }) => {
         setSharedDocuments(sharesRes.value);
       }
 
-      if (logsRes.status === 'fulfilled' && Array.isArray(logsRes.value) && logsRes.value.length > 0) {
+      if (logsRes.status === 'fulfilled' && Array.isArray(logsRes.value)) {
         setActivities(logsRes.value);
       }
     } catch (err) {
-      console.warn('API data fetch failed, using stored local state:', err);
+      console.warn('API data fetch failed:', err);
     } finally {
       setIsLoading(false);
     }
@@ -98,7 +116,7 @@ export const DocumentProvider = ({ children }) => {
       title,
       description,
       timestamp: new Date().toISOString(),
-      user: 'Sumanth',
+      user: user?.name || 'User',
       documentId,
       badge: badge || 'Activity'
     };
@@ -107,7 +125,7 @@ export const DocumentProvider = ({ children }) => {
 
   // Document Operations
   const addDocument = async (docData) => {
-    const sizeBytes = docData.file?.size || docData.sizeBytes || 2400000;
+    const sizeBytes = docData.file?.size || docData.sizeBytes || 0;
     
     // Create optimistic doc
     const optimisticDoc = {
@@ -414,15 +432,20 @@ export const DocumentProvider = ({ children }) => {
       }
     });
 
-    const storageUsedMB = (totalSizeBytes / (1024 * 1024)).toFixed(1);
-    const storageLimitMB = 1024; // 1 GB
-    const storagePercentage = Math.min(100, Math.round((totalSizeBytes / (storageLimitMB * 1024 * 1024)) * 100));
+    const storageUsedMB = (totalSizeBytes / (1024 * 1024)).toFixed(2);
+    const storageLimitMB = 1024; // 1 GB Quota
+    const rawPercentage = (totalSizeBytes / (storageLimitMB * 1024 * 1024)) * 100;
+    const storagePercentage = totalSizeBytes === 0
+      ? 0
+      : rawPercentage < 0.1
+      ? parseFloat(rawPercentage.toFixed(2))
+      : parseFloat(rawPercentage.toFixed(1));
 
     const storageBreakdown = [
-      { name: 'PDF Documents', value: parseFloat((pdfBytes / (1024 * 1024)).toFixed(1)), color: '#2563eb' },
-      { name: 'Scanned Images', value: parseFloat((imageBytes / (1024 * 1024)).toFixed(1)), color: '#059669' },
-      { name: 'Certificates & Text', value: parseFloat((docBytes / (1024 * 1024)).toFixed(1)), color: '#6366f1' },
-      { name: 'Other Archives', value: parseFloat((otherBytes / (1024 * 1024)).toFixed(1)) || 2.4, color: '#64748b' }
+      { name: 'PDF Documents', value: parseFloat((pdfBytes / (1024 * 1024)).toFixed(2)), color: '#2563eb' },
+      { name: 'Scanned Images', value: parseFloat((imageBytes / (1024 * 1024)).toFixed(2)), color: '#059669' },
+      { name: 'Certificates & Text', value: parseFloat((docBytes / (1024 * 1024)).toFixed(2)), color: '#6366f1' },
+      { name: 'Other Archives', value: parseFloat((otherBytes / (1024 * 1024)).toFixed(2)), color: '#64748b' }
     ];
 
     const expiringSoonDocs = documents

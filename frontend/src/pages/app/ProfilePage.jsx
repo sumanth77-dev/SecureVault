@@ -25,10 +25,20 @@ export const ProfilePage = () => {
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
-    name: user?.name || 'Sumanth',
-    email: user?.email || 'sumanth@example.com',
-    phone: user?.phone || '+1 (555) 234-5678'
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || ''
   });
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || ''
+      });
+    }
+  }, [user]);
 
   const [sessionToRevoke, setSessionToRevoke] = useState(null);
   const [isSaving, setIsSaving] = useState(false);

@@ -5,60 +5,17 @@ import { userService } from '../services/userService';
 
 const AuthContext = createContext(null);
 
-const DEFAULT_USER = {
-  id: 'usr-default-01',
-  name: 'Sumanth Rao',
-  email: 'sumanth@example.com',
-  phone: '+1 (555) 234-5678',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  twoFactorEnabled: true,
-  securityScore: 94,
-  joinedDate: '2025-01-15',
-  authProvider: 'LOCAL',
-  plan: 'Pro Security Vault',
-  storageUsed: '4.2 GB',
-  storageLimit: '10 GB'
-};
-
-const DEFAULT_SESSIONS = [
-  {
-    id: 'sess-1',
-    device: 'MacBook Pro 16" (Current)',
-    location: 'San Francisco, CA, USA',
-    ip: '192.168.1.104',
-    lastActive: 'Just now',
-    current: true,
-    browser: 'Chrome 122.0'
-  },
-  {
-    id: 'sess-2',
-    device: 'iPhone 15 Pro Max',
-    location: 'San Jose, CA, USA',
-    ip: '172.56.21.89',
-    lastActive: '2 hours ago',
-    current: false,
-    browser: 'Mobile Safari'
-  },
-  {
-    id: 'sess-3',
-    device: 'iPad Pro 12.9"',
-    location: 'San Francisco, CA, USA',
-    ip: '192.168.1.112',
-    lastActive: '3 days ago',
-    current: false,
-    browser: 'Mobile Safari'
-  }
-];
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => getStorageItem('sv_user', DEFAULT_USER));
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getStorageItem('sv_auth_token', true));
-  const [sessions, setSessions] = useState(() => getStorageItem('sv_sessions', DEFAULT_SESSIONS));
+  const [user, setUser] = useState(() => getStorageItem('sv_user', null));
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getStorageItem('sv_auth_token', false));
+  const [sessions, setSessions] = useState(() => getStorageItem('sv_sessions', []));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
       setStorageItem('sv_user', user);
+    } else {
+      removeStorageItem('sv_user');
     }
   }, [user]);
 
@@ -68,25 +25,37 @@ export const AuthProvider = ({ children }) => {
 
   // Check current session from API on mount
   useEffect(() => {
+    const token = getStorageItem('sv_auth_token', null);
+    if (!token) {
+      setIsAuthenticated(false);
+      setUser(null);
+      return;
+    }
+
     authService.getMe()
       .then(userData => {
         if (userData) {
-          setUser(prev => ({
-            ...DEFAULT_USER,
-            ...prev,
-            ...userData,
-            authProvider: userData.authProvider || prev.authProvider || 'LOCAL'
-          }));
+          setUser(userData);
           setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+          setUser(null);
+          removeStorageItem('sv_auth_token');
+          removeStorageItem('sv_user');
         }
       })
       .catch(() => {
-        // Unauthenticated session
+        setIsAuthenticated(false);
+        setUser(null);
+        removeStorageItem('sv_auth_token');
+        removeStorageItem('sv_user');
       });
 
     const handleAuthExpired = () => {
       setIsAuthenticated(false);
+      setUser(null);
       removeStorageItem('sv_auth_token');
+      removeStorageItem('sv_user');
     };
 
     window.addEventListener('sv_auth_expired', handleAuthExpired);
@@ -100,7 +69,6 @@ export const AuthProvider = ({ children }) => {
       if (result?.accessToken) {
         setStorageItem('sv_auth_token', result.accessToken);
         const loggedUser = {
-          ...DEFAULT_USER,
           ...result.user,
           authProvider: result.user?.authProvider || 'LOCAL',
           securityScore: result.user?.twoFactorEnabled ? 94 : 65
@@ -125,7 +93,6 @@ export const AuthProvider = ({ children }) => {
       if (result?.accessToken) {
         setStorageItem('sv_auth_token', result.accessToken);
         const newUser = {
-          ...DEFAULT_USER,
           ...result.user,
           authProvider: 'LOCAL',
           joinedDate: new Date().toISOString().split('T')[0]
@@ -163,7 +130,6 @@ export const AuthProvider = ({ children }) => {
       const userData = await authService.getMe();
       if (userData) {
         const loggedUser = {
-          ...DEFAULT_USER,
           ...userData,
           authProvider: userData.authProvider || 'GOOGLE',
           securityScore: userData.twoFactorEnabled ? 94 : 75

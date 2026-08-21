@@ -41,39 +41,18 @@ export const SharedViewerPage = () => {
     let isMounted = true;
     async function loadShare() {
       setLoading(true);
+      setError('');
       try {
         if (token) {
           const data = await shareService.getPublicShare(token);
           if (isMounted && data) {
             setShareData(data);
-            setIsUnlocked(data.isUnlocked);
+            setIsUnlocked(data.isUnlocked || !data.hasPassword);
           }
         }
       } catch (err) {
-        console.warn('Could not load remote share metadata, using local context fallback:', err);
-        // Fallback to local context share
-        const localShare =
-          sharedDocuments.find(s => s.token === token) ||
-          sharedDocuments.find(s => s.status === 'active') ||
-          sharedDocuments[0];
-        
-        const localDoc = localShare
-          ? documents.find(d => d.id === localShare.documentId) || documents[0]
-          : documents[0];
-
         if (isMounted) {
-          setShareData({
-            token: localShare?.token || token,
-            documentName: localShare?.documentName || localDoc?.name,
-            category: localDoc?.category || 'Personal',
-            sizeFormatted: localDoc?.sizeFormatted || '2.4 MB',
-            hasPassword: localShare?.hasPassword,
-            sharedBy: 'Sumanth',
-            sharedWith: localShare?.sharedWith || 'Recipient',
-            allowDownload: localShare?.allowDownload !== false,
-            localDoc
-          });
-          setIsUnlocked(!localShare?.hasPassword);
+          setError(err.message || 'This secure link is invalid or has expired.');
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -82,7 +61,7 @@ export const SharedViewerPage = () => {
 
     loadShare();
     return () => { isMounted = false; };
-  }, [token, sharedDocuments, documents]);
+  }, [token]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -116,13 +95,6 @@ export const SharedViewerPage = () => {
         }
       }
     } catch (err) {
-      // Fallback check
-      if (password === 'vault-pass-2026' || password.length > 0) {
-        setIsUnlocked(true);
-        setError('');
-        showToast('Document decrypted and unlocked.', 'success');
-        return;
-      }
       setError(err.message || 'Incorrect passcode. Please check with the document owner.');
     }
   };
@@ -248,9 +220,8 @@ export const SharedViewerPage = () => {
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-                  <span>Enter Passcode</span>
-                  <span className="text-[11px] text-blue-600 dark:text-blue-400 font-normal">Hint: vault-pass-2026</span>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Enter Passcode
                 </label>
                 <div className="relative">
                   <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -312,7 +283,7 @@ export const SharedViewerPage = () => {
 
             {/* Document Rendered Canvas */}
             <div className="p-4 sm:p-8 bg-slate-100/70 dark:bg-slate-900/60 rounded-3xl border border-slate-200/80 dark:border-slate-800">
-              <DocumentPreviewCanvas document={currentDoc} />
+              <DocumentPreviewCanvas document={currentDoc} token={token} unlockToken={unlockToken} />
             </div>
 
             {/* Security note */}

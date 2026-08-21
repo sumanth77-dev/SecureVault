@@ -14,6 +14,7 @@ import { StatusBadge } from '../common/StatusBadge';
 import { useDocuments } from '../../context/DocumentContext';
 import { useToast } from '../common/Toast';
 import { formatDate } from '../../utils/formatters';
+import { documentService } from '../../services/documentService';
 
 export const DocumentTable = ({ documents, onShare, onRename, onDelete }) => {
   const navigate = useNavigate();
@@ -21,12 +22,31 @@ export const DocumentTable = ({ documents, onShare, onRename, onDelete }) => {
   const { showToast } = useToast();
   const [activeMenuDocId, setActiveMenuDocId] = useState(null);
 
-  const handleDownload = (e, doc) => {
+  const handlePreview = async (e, doc) => {
     e.stopPropagation();
-    showToast(`Downloading "${doc.name}"...`, 'info');
-    setTimeout(() => {
-      showToast(`Downloaded "${doc.name}" successfully.`, 'success');
-    }, 1000);
+    try {
+      showToast(`Opening preview for "${doc.name}"...`, 'info');
+      const res = await documentService.getPreviewUrl(doc.id);
+      if (res?.previewUrl) {
+        window.open(res.previewUrl, '_blank');
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to open preview.', 'error');
+    }
+  };
+
+  const handleDownload = async (e, doc) => {
+    e.stopPropagation();
+    try {
+      showToast(`Downloading "${doc.name}"...`, 'info');
+      const res = await documentService.getDownloadUrl(doc.id);
+      if (res?.downloadUrl) {
+        window.open(res.downloadUrl, '_blank');
+        showToast(`Downloaded "${doc.name}" successfully.`, 'success');
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to download document.', 'error');
+    }
     setActiveMenuDocId(null);
   };
 
@@ -113,15 +133,22 @@ export const DocumentTable = ({ documents, onShare, onRename, onDelete }) => {
                 <td className="py-3.5 pr-4 sm:pr-6 pl-2 text-right" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1">
                     <button
+                      onClick={(e) => handlePreview(e, doc)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                      title="View / Preview in browser"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => onShare(doc)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                       title="Share link"
                     >
                       <Share2 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => handleDownload(e, doc)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                       title="Download"
                     >
                       <Download className="w-4 h-4" />

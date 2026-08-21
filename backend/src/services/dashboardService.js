@@ -94,16 +94,21 @@ export const dashboardService = {
       }
     });
 
-    const storageLimitMB = 1024; // 1 GB
+    const storageLimitMB = 1024; // 1 GB Quota
     const storageLimitBytes = storageLimitMB * 1024 * 1024;
-    const storageUsedMB = parseFloat((totalSizeBytes / (1024 * 1024)).toFixed(1));
-    const storagePercentage = Math.min(100, Math.round((totalSizeBytes / storageLimitBytes) * 100));
+    const storageUsedMB = parseFloat((totalSizeBytes / (1024 * 1024)).toFixed(2));
+    const rawPercentage = (totalSizeBytes / storageLimitBytes) * 100;
+    const storagePercentage = totalSizeBytes === 0
+      ? 0
+      : rawPercentage < 0.1
+      ? parseFloat(rawPercentage.toFixed(2))
+      : parseFloat(Math.min(100, rawPercentage).toFixed(1));
 
     const storageBreakdown = [
-      { name: 'PDF Documents', value: parseFloat((pdfBytes / (1024 * 1024)).toFixed(1)), color: '#2563eb' },
-      { name: 'Scanned Images', value: parseFloat((imageBytes / (1024 * 1024)).toFixed(1)), color: '#059669' },
-      { name: 'Certificates & Text', value: parseFloat((docBytes / (1024 * 1024)).toFixed(1)), color: '#6366f1' },
-      { name: 'Other Archives', value: parseFloat((otherBytes / (1024 * 1024)).toFixed(1)), color: '#64748b' }
+      { name: 'PDF Documents', value: parseFloat((pdfBytes / (1024 * 1024)).toFixed(2)), color: '#2563eb' },
+      { name: 'Scanned Images', value: parseFloat((imageBytes / (1024 * 1024)).toFixed(2)), color: '#059669' },
+      { name: 'Certificates & Text', value: parseFloat((docBytes / (1024 * 1024)).toFixed(2)), color: '#6366f1' },
+      { name: 'Other Archives', value: parseFloat((otherBytes / (1024 * 1024)).toFixed(2)), color: '#64748b' }
     ];
 
     const formattedRecentDocs = recentDocs.map(d => ({

@@ -183,7 +183,7 @@ export const Topbar = ({ onOpenSearch, onOpenMobileMenu }) => {
               className="w-7 h-7 rounded-full object-cover"
             />
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 hidden sm:inline">
-              {user?.name || 'Sumanth'}
+              {user?.name || 'User'}
             </span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>

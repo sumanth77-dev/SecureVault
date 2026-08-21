@@ -15,7 +15,8 @@ import {
   Activity,
   CheckCircle2,
   HardDrive,
-  Layers
+  Layers,
+  Eye
 } from 'lucide-react';
 import { DocumentPreviewCanvas } from '../../components/common/DocumentPreviewCanvas';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -38,7 +39,7 @@ export const DocumentDetailsPage = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('activity'); // 'activity' | 'versions'
 
-  const document = documents.find(d => d.id === id) || documents[0];
+  const document = documents.find(d => d.id === id);
 
   if (!document) {
     return (
@@ -52,10 +53,25 @@ export const DocumentDetailsPage = () => {
     );
   }
 
+  const handlePreview = async () => {
+    showToast(`Opening preview for "${document.name}"...`, 'info');
+    try {
+      if (document.id) {
+        const res = await documentService.getPreviewUrl(document.id);
+        if (res?.previewUrl) {
+          window.open(res.previewUrl, '_blank');
+          return;
+        }
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to open document preview.', 'error');
+    }
+  };
+
   const handleDownload = async () => {
     showToast(`Generating secure download for "${document.name}"...`, 'info');
     try {
-      if (document.id && !document.id.startsWith('mock-')) {
+      if (document.id) {
         const res = await documentService.getDownloadUrl(document.id);
         if (res?.downloadUrl) {
           window.open(res.downloadUrl, '_blank');
@@ -64,11 +80,8 @@ export const DocumentDetailsPage = () => {
         }
       }
     } catch (err) {
-      console.warn('API download trigger fallback:', err);
+      showToast(err.message || 'Failed to download document.', 'error');
     }
-    setTimeout(() => {
-      showToast(`Downloaded "${document.name}" successfully.`, 'success');
-    }, 1000);
   };
 
   const handleRename = (newName) => {
@@ -89,7 +102,7 @@ export const DocumentDetailsPage = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/documents')}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title="Back to Documents"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -107,6 +120,9 @@ export const DocumentDetailsPage = () => {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" icon={Eye} onClick={handlePreview}>
+            View
+          </Button>
           <Button variant="secondary" size="sm" icon={Download} onClick={handleDownload}>
             Download
           </Button>

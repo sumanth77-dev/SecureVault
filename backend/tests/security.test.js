@@ -69,6 +69,16 @@ describe('Authorization & Security Tests', () => {
     assert.equal(res.body.success, false);
   });
 
+  test('User A CAN preview their own document', async () => {
+    const res = await request(app)
+      .get(`/api/documents/${userADocId}/preview`)
+      .set('Authorization', `Bearer ${userAToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.data.previewUrl);
+  });
+
   test('User B CANNOT download User A document', async () => {
     const res = await request(app)
       .get(`/api/documents/${userADocId}/download`)
@@ -76,6 +86,16 @@ describe('Authorization & Security Tests', () => {
 
     assert.equal(res.status, 404);
     assert.equal(res.body.success, false);
+  });
+
+  test('User A CAN download their own document', async () => {
+    const res = await request(app)
+      .get(`/api/documents/${userADocId}/download`)
+      .set('Authorization', `Bearer ${userAToken}`);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.success, true);
+    assert.ok(res.body.data.downloadUrl);
   });
 
   test('User B CANNOT delete User A document', async () => {

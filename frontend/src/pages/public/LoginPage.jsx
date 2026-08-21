@@ -22,8 +22,8 @@ export const LoginPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [email, setEmail] = useState('sumanth@example.com');
-  const [password, setPassword] = useState('SecureVault2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,8 +74,9 @@ export const LoginPage = () => {
     setError('');
 
     try {
-      await login(email, password, rememberMe);
-      showToast('Welcome back, Sumanth!', 'success');
+      const res = await login(email, password, rememberMe);
+      const name = res?.user?.name || 'User';
+      showToast(`Welcome back, ${name}!`, 'success');
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Invalid credentials. Please try again.');

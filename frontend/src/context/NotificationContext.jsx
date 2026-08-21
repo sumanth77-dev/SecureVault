@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { INITIAL_NOTIFICATIONS } from '../data/mockNotifications';
-import { getStorageItem, setStorageItem } from '../utils/storage';
+import { getStorageItem, setStorageItem, removeStorageItem } from '../utils/storage';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from './AuthContext';
 
@@ -9,23 +8,32 @@ const NotificationContext = createContext();
 export const NotificationProvider = ({ children }) => {
   const { isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState(() =>
-    getStorageItem('sv_notifications', INITIAL_NOTIFICATIONS)
+    getStorageItem('sv_notifications', [])
   );
 
   useEffect(() => {
-    setStorageItem('sv_notifications', notifications);
-  }, [notifications]);
+    if (!isAuthenticated) {
+      setNotifications([]);
+      removeStorageItem('sv_notifications');
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setStorageItem('sv_notifications', notifications);
+    }
+  }, [notifications, isAuthenticated]);
 
   // Fetch real notifications from backend
   const fetchNotifications = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const data = await notificationService.getNotifications();
-      if (data?.notifications?.length > 0) {
+      if (Array.isArray(data?.notifications)) {
         setNotifications(data.notifications);
       }
     } catch (err) {
-      console.warn('API notifications fetch failed, using local storage cache:', err);
+      console.warn('API notifications fetch failed:', err);
     }
   }, [isAuthenticated]);
 
