@@ -33,27 +33,55 @@ app.use(helmet({
 }));
 
 // CORS configuration
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
+const cleanUrl = (url) => (url ? url.trim().replace(/\/+$/, '') : '');
+
+const envOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(cleanUrl)
+  .filter(Boolean);
+
+const staticAllowedOrigins = [
+  'https://secure-vault-lac-omega.vercel.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
   'http://localhost:5000'
 ];
 
-app.use(cors({
+const allowedOrigins = Array.from(new Set([...envOrigins, ...staticAllowedOrigins]));
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  const cleanOrigin = cleanUrl(origin);
+  if (allowedOrigins.some(allowed => cleanUrl(allowed) === cleanOrigin)) {
+    return true;
+  }
+  // Allow all Vercel deployment URLs (*.vercel.app)
+  if (/^https:\/\/[a-zA-Z0-9_-]+\.vercel\.app$/.test(cleanOrigin)) {
+    return true;
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    return true;
+  }
+  return false;
+};
+
+const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl, or Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (isOriginAllowed(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('Blocked by CORS policy'));
+    return callback(new Error(`Blocked by CORS policy: ${origin}`));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-unlock-token']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-unlock-token', 'Cookie', 'X-Requested-With', 'Accept'],
+  exposedHeaders: ['Set-Cookie'],
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // Request parsing
 app.use(express.json({ limit: '10mb' }));
